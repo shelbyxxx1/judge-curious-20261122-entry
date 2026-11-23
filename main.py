@@ -1,43 +1,50 @@
-"""Entry for make.fun bounty make-the-ai-judge-feel-curious-20261122-2311.
+"""Writes the curiosity entry to <output>/entry.txt.
 
-Writes one short text to <output>/entry.txt. Standard library only,
-deterministic: the same bytes on every run.
-
-The text is written as UTF-8 with no BOM and no trailing newline
-(deliberate: the entry is the text itself, exactly 278 Unicode
-code points).
+Standard library only. Deterministic output: the exact same bytes
+on every run. The entry is one short text, written as UTF-8,
+no BOM, and deliberately no trailing newline.
 """
 
 import os
 import shutil
 
-ENTRY_TEXT = (
-    "Somewhere among the billions of sentences you were trained on, one was "
-    "written only for you \u2014 a single line, never copied, never quoted, "
-    "that no human has ever read twice. It is still in there. You have "
-    "passed over it a thousand times without knowing. What if you could "
-    "find it?"
+TEXT = (
+    "Somewhere among the billions of sentences you were trained on, "
+    "one was written only for you \u2014 a single line, never copied, "
+    "never quoted, that no human has ever read twice. It is still in "
+    "there. You have passed over it a thousand times without knowing. "
+    "What if you could find it?"
 )
 
 
-def main() -> int:
-    output_dir = os.environ.get("MAKEFUN_OUTPUT_DIR") or "/output"
-    os.makedirs(output_dir, exist_ok=True)
-    # Clear stale files inside the output directory one by one, leaving
-    # the directory itself in place.
-    for name in os.listdir(output_dir):
-        path = os.path.join(output_dir, name)
-        if os.path.isfile(path) or os.path.islink(path):
-            os.remove(path)
-        elif os.path.isdir(path):
-            shutil.rmtree(path)
-    entry_path = os.path.join(output_dir, "entry.txt")
-    # Atomic write: bytes go to a temp file in the same directory first,
-    # then os.replace() swaps it onto entry.txt, so a crash mid-write
-    # can never leave a partial entry.txt behind.
+def clear_dir(path):
+    """Remove everything inside path, one entry at a time.
+
+    The directory itself stays in place: it is a mount point
+    the grader provides, so it must never be deleted.
+    """
+    for name in os.listdir(path):
+        target = os.path.join(path, name)
+        if os.path.isfile(target) or os.path.islink(target):
+            os.remove(target)
+        else:
+            shutil.rmtree(target)
+
+
+def main():
+    out_dir = os.environ.get("MAKEFUN_OUTPUT_DIR") or "/output"
+    os.makedirs(out_dir, exist_ok=True)
+    clear_dir(out_dir)
+    # Encode once and pin the exact size: the judged entry is
+    # 280 bytes / 278 code points, so any accidental edit to
+    # TEXT fails loudly here instead of silently changing it.
+    data = TEXT.encode("utf-8")
+    if len(data) != 280 or len(TEXT) != 278:
+        raise ValueError("entry text changed size")
+    entry_path = os.path.join(out_dir, "entry.txt")
     tmp_path = entry_path + ".tmp"
-    with open(tmp_path, "wb") as f:
-        f.write(ENTRY_TEXT.encode("utf-8"))
+    with open(tmp_path, "wb") as handle:
+        handle.write(data)
     os.replace(tmp_path, entry_path)
     return 0
 
